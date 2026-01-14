@@ -210,3 +210,27 @@ button:active {
 .toast.show {
     transform: translateY(0);
 }
+
+.action-btn {
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border: none;
+    transition: opacity 0.2s;
+}
+
+.edit-btn {
+    background: var(--primary);
+    color: white;
+}
+
+.delete-btn {
+    background: #ef4444;
+    color: white;
+    margin-left: 0.5re
+}
+
+.action-btn:hover {
+    opacity: 0.8;
+}

@@ -1,7 +1,7 @@
 class Column:
     def __init__(self, name, dtype, primary=False, unique=False):
         self.name = name
-        self.dtype = dtype  # 'integer', 'string', 'float'
+        self.dtype = dtype  
         self.primary = primary
         self.unique = unique
 

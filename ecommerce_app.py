@@ -34,7 +34,7 @@ def create_order(product_id: int, quantity: int):
         raise HTTPException(status_code=404, detail="Product not found")
 
     total = product[0]["price"] * quantity
-    # Generate a unique ID (simple increment for now)
+
     new_id = 1
     if db.tables["orders"].rows:
         new_id = max(r["id"] for r in db.tables["orders"].rows) + 1
@@ -50,7 +50,6 @@ def create_order(product_id: int, quantity: int):
 
 @app.get("/orders")
 def get_orders():
-    # Return joined results so we can see product names
     return db.tables["orders"].join(db.tables["products"], "product_id", "id")
 
 
@@ -91,19 +90,6 @@ def home():
         <title>Nai Store | Next-Gen E-commerce</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="./static/style.css">
-        <style>
-            .action-btn {{
-                padding: 0.5rem;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 0.8rem;
-                border: none;
-                transition: opacity 0.2s;
-            }}
-            .edit-btn {{ background: var(--primary); color: white; }}
-            .delete-btn {{ background: #ef4444; color: white; margin-left: 0.5rem; }}
-            .action-btn:hover {{ opacity: 0.8; }}
-        </style>
     </head>
     <body>
         <div class="container">
