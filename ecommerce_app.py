@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.responses import HTMLResponse
 from mini_rdbms import Database, Column
 from fastapi.staticfiles import StaticFiles
+from typing import Optional
 
 
 app = FastAPI()
@@ -33,8 +34,13 @@ def create_order(product_id: int, quantity: int):
         raise HTTPException(status_code=404, detail="Product not found")
 
     total = product[0]["price"] * quantity
+    # Generate a unique ID (simple increment for now)
+    new_id = 1
+    if db.tables["orders"].rows:
+        new_id = max(r["id"] for r in db.tables["orders"].rows) + 1
+        
     db.tables["orders"].insert({
-        "id": len(db.tables["orders"].rows) + 1,
+        "id": new_id,
         "product_id": product_id, 
         "quantity": quantity, 
         "total_price": total
@@ -44,7 +50,31 @@ def create_order(product_id: int, quantity: int):
 
 @app.get("/orders")
 def get_orders():
-    return db.tables["orders"].select()
+    # Return joined results so we can see product names
+    return db.tables["orders"].join(db.tables["products"], "product_id", "id")
+
+
+@app.put("/orders/{order_id}")
+def update_order(order_id: int, quantity: int):
+    order = db.tables["orders"].select({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    product_id = order[0]["product_id"]
+    product = db.tables["products"].select({"id": product_id})
+    total = product[0]["price"] * quantity
+    
+    db.tables["orders"].update(
+        {"quantity": quantity, "total_price": total},
+        {"id": order_id}
+    )
+    return {"message": "Order updated successfully"}
+
+
+@app.delete("/orders/{order_id}")
+def delete_order(order_id: int):
+    db.tables["orders"].delete({"id": order_id})
+    return {"message": "Order deleted successfully"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -61,6 +91,19 @@ def home():
         <title>Nai Store | Next-Gen E-commerce</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="./static/style.css">
+        <style>
+            .action-btn {{
+                padding: 0.5rem;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 0.8rem;
+                border: none;
+                transition: opacity 0.2s;
+            }}
+            .edit-btn {{ background: var(--primary); color: white; }}
+            .delete-btn {{ background: #ef4444; color: white; margin-left: 0.5rem; }}
+            .action-btn:hover {{ opacity: 0.8; }}
+        </style>
     </head>
     <body>
         <div class="container">
@@ -104,9 +147,10 @@ def home():
                         <thead>
                             <tr>
                                 <th>Order ID</th>
-                                <th>Product ID</th>
+                                <th>Product</th>
                                 <th>Quantity</th>
                                 <th>Total Price</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="ordersBody">
@@ -117,7 +161,7 @@ def home():
             </div>
         </div>
 
-        <div id="toast" class="toast">Order Placed Successfully!</div>
+        <div id="toast" class="toast">Action Successful!</div>
 
         <script>
             async function loadOrders() {{
@@ -126,12 +170,16 @@ def home():
                 const tbody = document.getElementById('ordersBody');
                 tbody.innerHTML = orders.map(o => `
                     <tr>
-                        <td>#${{o.id}}</td>
-                        <td>${{o.product_id}}</td>
-                        <td>${{o.quantity}}</td>
-                        <td><span style="color: var(--accent); font-weight: 600;">$${{o.total_price.toFixed(2)}}</span></td>
+                        <td>#${{o.orders_id}}</td>
+                        <td>${{o.products_name}}</td>
+                        <td>${{o.orders_quantity}}</td>
+                        <td><span style="color: var(--accent); font-weight: 600;">$${{o.orders_total_price.toFixed(2)}}</span></td>
+                        <td>
+                            <button onclick="editOrder(${{o.orders_id}}, ${{o.orders_quantity}})" class="action-btn edit-btn">Edit</button>
+                            <button onclick="deleteOrder(${{o.orders_id}})" class="action-btn delete-btn">Delete</button>
+                        </td>
                     </tr>
-                `).join('') || '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No orders yet</td></tr>';
+                `).join('') || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No orders yet</td></tr>';
             }}
 
             document.getElementById('orderForm').onsubmit = async (e) => {{
@@ -146,7 +194,7 @@ def home():
                     }});
                     
                     if (response.ok) {{
-                        showToast();
+                        showToast("Order Placed Successfully!");
                         loadOrders();
                         e.target.reset();
                     }}
@@ -155,8 +203,42 @@ def home():
                 }}
             }};
 
-            function showToast() {{
+            async function editOrder(id, currentQty) {{
+                const newQty = prompt("Enter new quantity:", currentQty);
+                if (newQty !== null && newQty !== "" && !isNaN(newQty)) {{
+                    try {{
+                        const response = await fetch(`/orders/${{id}}?quantity=${{newQty}}`, {{
+                            method: 'PUT'
+                        }});
+                        if (response.ok) {{
+                            showToast("Order Updated!");
+                            loadOrders();
+                        }}
+                    }} catch (err) {{
+                        console.error(err);
+                    }}
+                }}
+            }}
+
+            async function deleteOrder(id) {{
+                if (confirm("Are you sure you want to delete this order?")) {{
+                    try {{
+                        const response = await fetch(`/orders/${{id}}`, {{
+                            method: 'DELETE'
+                        }});
+                        if (response.ok) {{
+                            showToast("Order Deleted!");
+                            loadOrders();
+                        }}
+                    }} catch (err) {{
+                        console.error(err);
+                    }}
+                }}
+            }}
+
+            function showToast(message) {{
                 const toast = document.getElementById('toast');
+                toast.textContent = message;
                 toast.classList.add('show');
                 setTimeout(() => toast.classList.remove('show'), 3000);
             }}
